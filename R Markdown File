@@ -1,0 +1,1067 @@
+---
+title: "AI Data Tables for Counties"
+author: "Brandon Wilson"
+date: "10/18/2019"
+output: word_document
+---
+
+```{r START HERE}
+##Enter the name of the City as x and the State as y. Put them in quotes. See example below.
+
+x <- "Wyoming"
+y <- "Pennsylvania"
+
+```
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = FALSE)
+
+##Load Libraries
+
+library(tidycensus)
+library(tigris)
+library(plyr)
+library(dplyr)
+library(tidyverse)
+library(magrittr)
+library(knitr)
+
+##Load ACS
+
+census_api_key('c331debe73a5ca1041fa2e8dbf1c5731a8b936f9', overwrite = TRUE, install = TRUE)
+
+v17 <- load_variables(2017, 'acs5', cache = TRUE)
+names(v17) <- c('variable', 'label', 'concept')
+
+vs17 <- load_variables(2017, 'acs5/subject', cache = TRUE)
+names(vs17) <- c('variable', 'label', 'concept')
+```
+
+```{r FIPS codes}
+fips <- str_extract_all(lookup_code(y), '[1234567890]')
+y <- paste0(fips[[1]][1],fips[[1]][2])
+```
+
+```{r race table, echo=FALSE}
+Race17 <- get_acs(geography = 'county', table = 'B02001', state = y)
+Race12 <- get_acs(geography = 'county', table = 'B02001', state = y, year = 2012)
+
+##add labels
+joinedrace17_tidy <- inner_join(Race17, v17, by = 'variable')
+joinedrace12_tidy <- inner_join(Race12, v17, by = 'variable')
+
+##filter to target location
+cityRace17 <- joinedrace17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+cityRace12 <- joinedrace12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+##add Hispanic or Latino
+Ethnicity17 <- get_acs(geography = 'county', table = 'B03003', state = y)
+Ethnicity12 <- get_acs(geography = 'county', table = 'B03003', state = y, year = 2012)
+
+joinedethnicity17_tidy <- inner_join(Ethnicity17, v17, by = 'variable')
+joinedethnicity12_tidy <- inner_join(Ethnicity12, v17, by = 'variable')
+
+##filter to target location
+HL17 <- joinedethnicity17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+HL12 <- joinedethnicity12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+##combine dataframes
+REcity17 <- rbind(cityRace17, HL17)
+REcity12 <- rbind(cityRace12, HL12)
+
+##add percent and kable
+basevalue17 <- as.numeric(REcity17[1,2])
+basevalue12 <- as.numeric(REcity12[1,2])
+
+fullcity17 <- REcity17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- REcity12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+RaceComplete <- bind_cols(fullcity12, fullcity17) %>%
+  select(
+    'label', '2012 estimate', '2012 percent', '2017 estimate', '2017 percent'
+  )
+
+kable(RaceComplete)
+```
+
+```{r age table, echo=FALSE}
+Age17 <- get_acs(geography = 'county', table = 'B01001', state = y)
+Age12 <- get_acs(geography = 'county', table = 'B01001', state = y, year = 2012)
+
+##add labels
+joinedage17_tidy <- inner_join(Age17, v17, by = 'variable')
+joinedage12_tidy <- inner_join(Age12, v17, by = 'variable')
+
+city17 <- joinedage17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- joinedage12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+AgeComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(AgeComplete)
+```
+
+```{r ancestry table, echo=FALSE}
+Ancestry17 <- get_acs(geography = 'county', table = 'B04004', state = y)
+Ancestry12 <- get_acs(geography = 'county', table = 'B04004', state = y, year = 2012)
+
+##add labels
+joinedancestry17_tidy <- inner_join(Ancestry17, v17, by = 'variable')
+joinedancestry12_tidy <- inner_join(Ancestry12, v17, by = 'variable')
+
+city17 <- joinedancestry17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- joinedancestry12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+AncestryComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(AncestryComplete)
+```
+
+```{r housing tenure by size table, echo=FALSE}
+HT17 <- get_acs(geography = 'county', table = 'B25009', state = y)
+HT12 <- get_acs(geography = 'county', table = 'B25009', state = y, year = 2012)
+
+##add labels
+joinedHT17_tidy <- inner_join(HT17, v17, by = 'variable')
+joinedHT12_tidy <- inner_join(HT12, v17, by = 'variable')
+
+city17 <- joinedHT17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- joinedHT12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+HousingTenureComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(HousingTenureComplete)
+```
+
+```{r housing tenure by race table, echo=FALSE}
+HTR17 <- get_acs(geography = 'county', table = 'B25003', state = y)
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003A', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003B', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003C', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003D', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003E', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003F', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003G', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003H', state = y))
+HTR17 <- rbind(HTR17, get_acs(geography = 'county', table = 'B25003I', state = y))
+HTR17 <- as.data.frame(distinct(HTR17))
+
+HTR12 <- get_acs(geography = 'county', table = 'B25003', state = y, year = 2012)
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003A', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003B', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003C', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003D', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003E', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003F', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003G', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003H', state = y))
+HTR12 <- rbind(HTR12, get_acs(geography = 'county', table = 'B25003I', state = y))
+HTR12 <- as.data.frame(distinct(HTR12))
+
+##add labels
+joinedHT17_tidy <- inner_join(HTR17, v17, by = 'variable')
+joinedHT12_tidy <- inner_join(HTR12, v17, by = 'variable')
+
+city17 <- joinedHT17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label,concept
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate,concept
+)
+
+city12 <- joinedHT12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label,concept
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% mutate(
+  concept=str_to_title(concept, locale = 'en') 
+) %>% select(
+  label2,estimate,concept
+)
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent,
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,concept,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label2', 'concept', '2012 estimate', '2012 percent')
+
+HousingTenureRComplete <- bind_cols(fullcity12, fullcity17) %>%
+  select(
+    'label','concept','2012 estimate', '2012 percent', '2017 estimate', '2017 percent'
+  )
+
+kable(HousingTenureRComplete)
+```
+
+```{r family table, echo=FALSE}
+Family17 <- get_acs(geography = 'county', table = 'B09019', state = y)
+Family12 <- get_acs(geography = 'county', table = 'B09019', state = y, year = 2012)
+
+##add labels
+joinedfamily17_tidy <- inner_join(Family17, v17, by = 'variable')
+joinedfamily12_tidy <- inner_join(Family12, v17, by = 'variable')
+
+city17 <- joinedfamily17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- joinedfamily12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+FamilyComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(FamilyComplete)
+```
+
+```{r household income table, echo=FALSE}
+HHI17 <- get_acs(geography = 'county', table = 'B19001', state = y)
+HHI12 <- get_acs(geography = 'county', table = 'B19001', state = y, year = 2012)
+
+##add labels
+HHI17_tidy <- inner_join(HHI17, v17, by = 'variable')
+HHI12_tidy <- inner_join(HHI12, v17, by = 'variable')
+
+city17 <- HHI17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- HHI12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+HHIComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(HHIComplete)
+```
+
+```{r Family & Household Poverty, echo=FALSE}
+FHP17 <- get_acs(geography = 'county', table = 'B17010', state = y)
+FHP12 <- get_acs(geography = 'county', table = 'B17010', state = y, year = 2012)
+
+##add labels
+FHP17_tidy <- inner_join(FHP17, v17, by = 'variable')
+FHP12_tidy <- inner_join(FHP12, v17, by = 'variable')
+
+city17 <- FHP17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- FHP12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+FHPComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(FHPComplete)
+```
+
+```{r Occupation, echo=FALSE}
+Occupation17 <- get_acs(geography = 'county', table = 'B08124', state = y)
+Occupation12 <- get_acs(geography = 'county', table = 'B08124', state = y, year = 2012)
+
+##add labels
+Occupation17_tidy <- inner_join(Occupation17, v17, by = 'variable')
+Occupation12_tidy <- inner_join(Occupation12, v17, by = 'variable')
+
+city17 <- Occupation17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- Occupation12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+OccupationComplete <- inner_join(fullcity12, fullcity17, by = 'label') %>% head(
+  (7)
+)
+
+kable(OccupationComplete)
+```
+
+```{r Worker Class, echo=FALSE}
+Class17 <- get_acs(geography = 'county', table = 'B08128', state = y)
+Class12 <- get_acs(geography = 'county', table = 'B08128', state = y, year = 2012)
+
+##add labels
+Class17_tidy <- inner_join(Class17, v17, by = 'variable')
+Class12_tidy <- inner_join(Class12, v17, by = 'variable')
+
+city17 <- Class17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- Class12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+ClassComplete <- inner_join(fullcity12, fullcity17, by = 'label') %>% head(
+  (10)
+)
+
+kable(ClassComplete)
+```
+
+```{r Year Structure Built, echo=FALSE}
+Year17 <- get_acs(geography = 'county', table = 'B25034', state = y)
+Year12 <- get_acs(geography = 'county', table = 'B25034', state = y, year = 2012)
+
+##add labels
+Year17_tidy <- inner_join(Year17, v17, by = 'variable')
+Year12_tidy <- inner_join(Year12, v17, by = 'variable')
+
+city17 <- Year17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- Year12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+YearComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(YearComplete)
+```
+
+```{r Units in Structure, echo=FALSE}
+Units17 <- get_acs(geography = 'county', table = 'B25024', state = y)
+Units12 <- get_acs(geography = 'county', table = 'B25024', state = y, year = 2012)
+
+##add labels
+Units17_tidy <- inner_join(Units17, v17, by = 'variable')
+Units12_tidy <- inner_join(Units12, v17, by = 'variable')
+
+city17 <- Units17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- Units12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+UnitsComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(UnitsComplete)
+```
+
+```{r Monthly Owner Costs, echo=FALSE}
+MOC17 <- get_acs(geography = 'county', table = 'B25094', state = y)
+MOC12 <- get_acs(geography = 'county', table = 'B25094', state = y, year = 2012)
+
+##add labels
+MOC17_tidy <- inner_join(MOC17, v17, by = 'variable')
+MOC12_tidy <- inner_join(MOC12, v17, by = 'variable')
+
+city17 <- MOC17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- MOC12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+MOCComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(MOCComplete)
+```
+
+```{r Monthly Owner Costs as % of HHI, echo=FALSE}
+MOCHHI17 <- get_acs(geography = 'county', table = 'B25095', state = y)
+MOCHHI12 <- get_acs(geography = 'county', table = 'B25095', state = y, year = 2014)
+
+##add labels
+MOCHHI17_tidy <- inner_join(MOCHHI17, v17, by = 'variable')
+MOCHHI12_tidy <- inner_join(MOCHHI12, v17, by = 'variable')
+
+city17 <- MOCHHI17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- MOCHHI12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2014 estimate', '2014 percent')
+
+MOCHHIComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(MOCHHIComplete)
+```
+
+```{r Monthly Renter Costs, echo=FALSE}
+Rents17 <- get_acs(geography = 'county', table = 'B25063', state = y)
+Rents12 <- get_acs(geography = 'county', table = 'B25063', state = y, year = 2012)
+
+##add labels
+Rents17_tidy <- inner_join(Rents17, v17, by = 'variable')
+Rents12_tidy <- inner_join(Rents12, v17, by = 'variable')
+
+city17 <- Rents17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- Rents12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+RentsComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(RentsComplete)
+```
+
+```{r Monthly Renter Costs as % of HHI, echo=FALSE}
+RentHHI17 <- get_acs(geography = 'county', table = 'B25106', state = y)
+RentHHI12 <- get_acs(geography = 'county', table = 'B25106', state = y, year = 2012)
+
+##add labels
+RentHHI17_tidy <- inner_join(RentHHI17, v17, by = 'variable')
+RentHHI12_tidy <- inner_join(RentHHI12, v17, by = 'variable')
+
+city17 <- RentHHI17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- RentHHI12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+RentHHIComplete <- inner_join(fullcity12, fullcity17, by = 'label') %>% tail(
+  (23)
+)
+
+kable(RentHHIComplete)
+```
+
+```{r Gross Rent as % of HHI, echo=FALSE}
+GRHHI17 <- get_acs(geography = 'county', table = 'B25070', state = y)
+GRHHI12 <- get_acs(geography = 'county', table = 'B25070', state = y, year = 2012)
+
+##add labels
+GRHHI17_tidy <- inner_join(GRHHI17, v17, by = 'variable')
+GRHHI12_tidy <- inner_join(GRHHI12, v17, by = 'variable')
+
+city17 <- GRHHI17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- GRHHI12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_replace_all(label, '!!', ' ')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+GRHHIComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(GRHHIComplete)
+```
+
+```{r General Disability List, echo=FALSE}
+Disability17 <- get_acs(geography = 'county', table = 'S1810', state = y)
+Disability12 <- get_acs(geography = 'county', table = 'S1810', state = y, year = 2015)
+
+##add labels
+Disability17_tidy <- inner_join(Disability17, vs17, by = 'variable')
+Disability12_tidy <- inner_join(Disability12, vs17, by = 'variable')
+
+city17 <- Disability17_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% filter(
+  grepl('S1810_C02', variable, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_to_title(str_replace_all(label, '!!', ' '), locale = 'en')
+) %>% select(
+  label2,estimate
+)
+
+city12 <- Disability12_tidy %>% filter(
+  grepl(x, NAME, fixed = TRUE)
+) %>% filter(
+  grepl('S1810_C02', variable, fixed = TRUE)
+) %>% select(
+  NAME,estimate,label
+) %>% mutate(
+  label2=str_to_title(str_replace_all(label, '!!', ' '), locale = 'en')
+) %>% select(
+  label2,estimate
+)
+
+
+##add percent and kable
+basevalue17 <- as.numeric(city17[1,2])
+basevalue12 <- as.numeric(city12[1,2])
+
+fullcity17 <- city17 %>% mutate(
+  percent=round(estimate/basevalue17*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+fullcity12 <- city12 %>% mutate(
+  percent=round(estimate/basevalue12*100, digits=2)
+) %>% select(
+  label2,estimate,percent
+) 
+
+names(fullcity17) <- c('label', '2017 estimate', '2017 percent')
+names(fullcity12) <- c('label', '2012 estimate', '2012 percent')
+
+DisabilityComplete <- inner_join(fullcity12, fullcity17, by = 'label')
+
+kable(DisabilityComplete)
+```
